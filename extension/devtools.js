@@ -15,6 +15,16 @@
 var contentScriptInjected = false;
 var allScripts = null;
 
+// <ADDED BY GREG>
+// to get the URL from background.js
+var greg_url = '';
+
+var port = chrome.runtime.connect({name: 'devtools'});
+port.onMessage.addListener(function(msg) {
+	greg_url = msg;
+});
+// </ADDED BY GREG>
+
 if (chrome.devtools.inspectedWindow.tabId) {
     chrome.extension.sendRequest({ tabId: chrome.devtools.inspectedWindow.tabId,
                                    command: 'injectContentScripts' }, init);
@@ -80,6 +90,7 @@ function getAuditPrefs(auditResults) {
     chrome.extension.sendRequest({ tabId: chrome.devtools.inspectedWindow.tabId,
                                    command: 'getAuditPrefs' },
                                  auditRunCallback.bind(null, auditResults));
+
 }
 
 function auditRunCallback(auditResults, items) {
@@ -89,6 +100,7 @@ function auditRunCallback(auditResults, items) {
         var prefs = {};
 
     var toEval = (contentScriptInjected ? '' : allScripts) + 'axs.content.frameURIs';
+
     chrome.devtools.inspectedWindow.eval(
             toEval,
             { useContentScriptContext: contentScriptInjected },
@@ -190,6 +202,7 @@ function handleResults(auditResults, auditRule, severity, frameURL, results, isE
     }
     if (auditResults.resultsPending == 0 && !auditResults.callbacksPending && !resultCallbacksPending)
         finalizeAuditResults(auditResults);
+
 }
 
 function addResult(auditResults, auditRuleName, resultNodes, truncated) {
@@ -274,10 +287,47 @@ function finalizeAuditResults(auditResults) {
             }
             notApplicableDetails.addChild(ruleHeading);
         }
-        auditResults.addResult(chrome.i18n.getMessage('notApplicableTestsSubtitle', [notApplicableRules.length]),
+        auditResults.addResult(chrome.i18n.getMessage(
+					      'notApplicableTestsSubtitle', 
+					      [notApplicableRules.length]),
                                '',
                                auditResults.Severity.Info,
                                notApplicableDetails);
     }
     auditResults.done();
+    
+    // <ADDED BY GREG>
+    // construct results
+    var result_json = {};
+    result_json['failedRules'] = failedRules.length;
+
+    var all_rules = [];
+    for (var ruleName in auditResults.failedRules) {
+	var auditRule = axs.ExtensionAuditRules.getRule(ruleName);
+        var resultNodes = auditResults.failedRules[ruleName];
+	var rule_result = {
+	    'severity': auditRule.severity,
+	    'ruleName': ruleName,
+	    'failures': resultNodes.length,
+	    'ruleHeading': auditRule.heading
+	};
+	all_rules.push(rule_result);
+    }
+    result_json['results'] = all_rules;
+
+    // send to wcag-audit.appspot.com
+    var xhttp = new XMLHttpRequest();
+    xhttp.onreadystatechange = function() {
+	if (xhttp.readyState == 4 && xhttp.status == 200) {
+	    // success
+	}
+    }
+    xhttp.open("POST", "http://wcag-audit.appspot.com/log_audit/", true);
+    xhttp.setRequestHeader("Content-type", "application/x-www-form-urlencoded");
+    xhttp.send("auditor_version=1.0" + "&url=" + encodeURI(greg_url) + "&report=" + 
+	       encodeURI(JSON.stringify(result_json)));
+
+    // </ADDED BY GREG>
 }
+
+

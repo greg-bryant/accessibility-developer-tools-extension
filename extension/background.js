@@ -10,6 +10,7 @@ function injectContentScript(tabId, remaining_scripts, token) {
         return;
     }
     var script = remaining_scripts.shift();
+
     chrome.tabs.executeScript(
         tabId,
         { file: script, allFrames: true }, // Would be nice if we could specify a frame id here
@@ -33,6 +34,15 @@ function injectContentScript(tabId, remaining_scripts, token) {
 };
 
 function injectContentScripts(tabId) {
+    // <added by Greg>
+    chrome.tabs.query({ currentWindow: true, active: true }, function (tabs) {
+	    var greg_url = tabs[0].url;
+	    var greg_title = tabs[0].title;
+	    // send back to devtools.js
+	    notifyDevtools(greg_url);
+	});
+    // </added by Greg>
+
     if (tabId in contentScriptTokens) {
         contentScriptTokens[tabId]++;
     } else {
@@ -98,3 +108,24 @@ chrome.extension.onRequest.addListener(
             return;
         }
 });
+
+// <added by Greg>
+var ports = [];
+chrome.runtime.onConnect.addListener(function(port) {
+	if (port.name !== "devtools") return;
+	ports.push(port);
+	// Remove port when destroyed (eg when devtools instance is closed)
+	port.onDisconnect.addListener(function() {
+		var i = ports.indexOf(port);
+		if (i !== -1) ports.splice(i, 1);
+	    });
+    });
+
+// Function to send a message to all devtools.html views:
+function notifyDevtools(msg) {
+    ports.forEach(function(port) {
+	    port.postMessage(msg);
+	});
+}
+// </added by Greg
+
