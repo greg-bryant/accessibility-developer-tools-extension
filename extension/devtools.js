@@ -308,7 +308,7 @@ function finalizeAuditResults(auditResults) {
 	var rule_result = {
 	    'severity': auditRule.severity,
 	    'ruleName': ruleName,
-	    'failures': resultNodes.length,
+	    'failures': resultNodes.length - 3,
 	    'ruleHeading': auditRule.heading
 	};
 	all_rules.push(rule_result);
